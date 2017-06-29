@@ -25,7 +25,8 @@ module OmniAuth
         {
           :name => raw_info['DisplayName'],
           :email => raw_info['EmailAddress'],
-          :nickname => raw_info['Alias']
+          :nickname => raw_info['Alias'],
+          :image => avatar_file
         }
       end
 
@@ -41,6 +42,28 @@ module OmniAuth
 
       def callback_url
         options[:redirect_uri] || (full_host + script_name + callback_path)
+      end
+
+      private
+
+      def avatar_file
+        photo = access_token.get("https://outlook.office.com/api/v2.0/me/photo/$value")
+        ext   = photo.content_type.sub("image/", "") # "image/jpeg" => "jpeg"
+
+        Tempfile.new(["avatar", ".#{ext}"]).tap do |file|
+          file.binmode
+          file.write(photo.body)
+          file.rewind
+        end
+
+      rescue ::OAuth2::Error => e
+        if e.response.status == 404 # User has no avatar...
+          return nil
+        elsif e.code["code"] == "GetUserPhoto" && e.code["message"].match("not supported")
+          nil
+        else
+          raise
+        end
       end
     end
   end
